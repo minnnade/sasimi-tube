@@ -26,83 +26,53 @@ app.get('/api/search', async (req, res) => {
 
   try {
     const youtube = await getYoutube();
+    const results = await youtube.search(query, { type: 'video', client: 'WEB' });
     
-    // 💡 WEBクライアントを明示的に指定して検索
-    const results = await youtube.search(query, { 
-      type: 'video',
-      client: 'WEB' 
+    if (!results || !results.videos || results.videos.length === 0) return res.json([]);
+
+    const videos = results.videos.filter(video => video.id).map(video => {
+      let thumbnailUrl = video.thumbnails?.[0]?.url || video.thumbnail?.[0]?.url || '';
+      return { id: video.id, title: video.title?.text || 'No Title', thumbnail: thumbnailUrl };
     });
-    
-    if (!results || !results.videos || results.videos.length === 0) {
-      return res.json([]);
-    }
-
-    const videos = results.videos
-      .filter(video => video.id)
-      .map(video => {
-        let thumbnailUrl = '';
-        if (video.thumbnails && video.thumbnails.length > 0) {
-          thumbnailUrl = video.thumbnails[0].url;
-        } else if (video.thumbnail && video.thumbnail.length > 0) {
-          thumbnailUrl = video.thumbnail[0].url;
-        }
-
-        return {
-          id: video.id,
-          title: video.title?.text || 'No Title',
-          thumbnail: thumbnailUrl
-        };
-      });
-
     res.json(videos);
   } catch (error) {
-    console.error('--- Search Error Log ---');
-    console.error(error);
-    res.status(500).json({ error: 'Error searching videos', message: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// 📺 2. YouTube動画のストリーミングAPI
-app.get('/api/stream', async (req, res) => {
+// 🔗 2. googlevideoストリームURLを直接返却するAPI
+app.get('/api/stream-url', async (req, res) => {
   const videoId = req.query.id;
   if (!videoId) return res.status(400).send('Video ID is required');
 
   try {
     const youtube = await getYoutube();
     
-    // 💡 プレイヤーのシグネチャエラーを防ぐためクライアントをWEBに設定
-    const stream = await youtube.download(videoId, {
-      type: 'video+audio',
-      quality: 'best',
-      client: 'WEB'
+    // 動画の全詳細情報を取得
+    const videoInfo = await youtube.getInfo(videoId, 'WEB');
+    
+    // 💡 映像と音声が合体している形式（Format）の中から最適なストリームURLを1つ抽出
+    const format = videoInfo.chooseFormat({
+      type: 'video+audio', 
+      quality: 'best'
     });
 
-    res.setHeader('Content-Type', 'video/mp4');
-    const reader = stream.getReader();
-    
-    function read() {
-      reader.read().then(({ done, value }) => {
-        if (done) {
-          res.end();
-          return;
-        }
-        res.write(Buffer.from(value));
-        read();
-      }).catch(err => {
-        console.error('Stream read error:', err);
-        res.end();
-      });
+    if (!format || !format.decipher(youtube.session.player)) {
+      throw new Error('Failed to decipher stream URL');
     }
-    read();
+
+    // 解号（デシファ）された「googlevideo.com」の生のURLを取得
+    const googleVideoUrl = format.url;
+
+    // ブラウザにURLをテキストでそのまま返す
+    res.json({ url: googleVideoUrl });
 
   } catch (error) {
-    console.error('--- Stream Error Log ---');
-    console.error(error);
-    res.status(500).send('Error streaming video');
+    console.error('Failed to get googlevideo URL:', error);
+    res.status(500).json({ error: 'Failed to get stream URL', message: error.message });
   }
 });
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
-
