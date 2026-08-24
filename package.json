@@ -1,0 +1,13 @@
+{
+  "name": "youtubeijs-render-player",
+  "version": "1.0.0",
+  "description": "YouTubei.js streaming server on Render",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "youtubei.js": "^12.2.0"
+  }
+}
