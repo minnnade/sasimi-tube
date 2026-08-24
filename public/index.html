@@ -3,36 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTubei.js Player</title>
+    <title>YouTubei.js Search Player</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: white; padding: 20px; }
-        input { padding: 10px; width: 300px; }
-        button { padding: 10px; cursor: pointer; }
-        video { margin-top: 20px; max-width: 100%; width: 640px; background: black; }
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; padding: 20px; margin: 0; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .search-box { margin-bottom: 20px; }
+        input { padding: 12px; width: 60%; border-radius: 4px; border: none; font-size: 16px; }
+        button { padding: 12px 24px; cursor: pointer; border-radius: 4px; border: none; background: #ff0000; color: white; font-weight: bold; font-size: 16px; }
+        button:hover { background: #cc0000; }
+        video { margin-top: 10px; width: 100%; max-width: 640px; background: black; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        
+        /* 検索結果のスタイリング */
+        #results { margin-top: 30px; display: flex; flex-direction: column; gap: 15px; text-align: left; }
+        .video-item { display: flex; gap: 15px; background: #333; padding: 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s, transform 0.1s; }
+        .video-item:hover { background: #444; transform: translateY(-2px); }
+        .video-item img { width: 140px; height: auto; border-radius: 6px; object-fit: cover; }
+        .video-title { font-size: 16px; font-weight: bold; margin: 0; align-self: center; line-height: 1.4; }
     </style>
 </head>
 <body>
-    <h1>YouTubei.js Player on Render</h1>
-    <input type="text" id="videoUrl" placeholder="YouTubeの動画URL、またはIDを入力">
-    <button onclick="loadVideo()">再生</button>
-    <br>
-    <video id="player" controls autoplay></video>
+    <div class="container">
+        <h1>YouTubei.js Search & Player</h1>
+        
+        <!-- 🔍 検索フォーム -->
+        <div class="search-box">
+            <input type="text" id="searchQuery" placeholder="動画のキーワードを入力...">
+            <button onclick="searchVideos()">検索</button>
+        </div>
+
+        <!-- 📺 プレイヤー本体 -->
+        <video id="player" controls autoplay></video>
+
+        <!-- 📋 検索結果一覧 -->
+        <div id="results"></div>
+    </div>
 
     <script>
-        function extractVideoId(url) {
-            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-            const match = url.match(regExp);
-            return (match && match[2].length === 11) ? match[2] : url;
+        // エンターキーでも検索できるようにする
+        document.getElementById('searchQuery').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchVideos();
+        });
+
+        // 1. サーバーの検索APIを呼び出す関数
+        async function searchVideos() {
+            const query = document.getElementById('searchQuery').value;
+            if (!query) return alert('キーワードを入力してください');
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p style="text-align:center;">検索中...</p>';
+
+            try {
+                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const videos = await response.json();
+
+                resultsDiv.innerHTML = ''; // 一度リセット
+
+                if (videos.length === 0) {
+                    resultsDiv.innerHTML = '<p style="text-align:center;">動画が見つかりませんでした</p>';
+                    return;
+                }
+
+                // 検索結果をループ処理で画面に追加
+                videos.forEach(video => {
+                    const item = document.createElement('div');
+                    item.className = 'video-item';
+                    item.onclick = () => playVideo(video.id); // クリックで再生
+
+                    item.innerHTML = `
+                        <img src="${video.thumbnail}" alt="thumbnail">
+                        <p class="video-title">${video.title}</p>
+                    `;
+                    resultsDiv.appendChild(item);
+                });
+
+            } catch (error) {
+                console.error('Search error:', error);
+                resultsDiv.innerHTML = '<p style="text-align:center; color:red;">検索中にエラーが発生しました</p>';
+            }
         }
 
-        function loadVideo() {
-            const input = document.getElementById('videoUrl').value;
-            const videoId = extractVideoId(input);
-            if (!videoId) return alert('動画IDかURLを入力してください');
-
+        // 2. 選択した動画を再生する関数
+        function playVideo(videoId) {
             const videoElement = document.getElementById('player');
-            // 自作したAPIのエンドポイントをビデオソースに指定する
+            // サーバーのストリーミングAPIのURLをビデオソースに設定
             videoElement.src = `/api/stream?id=${videoId}`;
+            
+            // 再生時に画面上部のプレイヤーまでスムーズにスクロール
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     </script>
 </body>
