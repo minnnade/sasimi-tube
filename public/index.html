@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTubei.js Player</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; padding: 20px; }
+        input { padding: 10px; width: 300px; }
+        button { padding: 10px; cursor: pointer; }
+        video { margin-top: 20px; max-width: 100%; width: 640px; background: black; }
+    </style>
+</head>
+<body>
+    <h1>YouTubei.js Player on Render</h1>
+    <input type="text" id="videoUrl" placeholder="YouTubeの動画URL、またはIDを入力">
+    <button onclick="loadVideo()">再生</button>
+    <br>
+    <video id="player" controls autoplay></video>
+
+    <script>
+        function extractVideoId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : url;
+        }
+
+        function loadVideo() {
+            const input = document.getElementById('videoUrl').value;
+            const videoId = extractVideoId(input);
+            if (!videoId) return alert('動画IDかURLを入力してください');
+
+            const videoElement = document.getElementById('player');
+            // 自作したAPIのエンドポイントをビデオソースに指定する
+            videoElement.src = `/api/stream?id=${videoId}`;
+        }
+    </script>
+</body>
+</html>
