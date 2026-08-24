@@ -26,12 +26,18 @@ app.get('/api/search', async (req, res) => {
 
   try {
     const youtube = await getYoutube();
-    const results = await youtube.search(query, { type: 'video', client: 'WEB' });
+    // 💡 検索時は公式TV用クライアントを擬似
+    const results = await youtube.search(query, { type: 'video', client: 'YTMEDIALITE' });
     
     if (!results || !results.videos || results.videos.length === 0) return res.json([]);
 
     const videos = results.videos.filter(video => video.id).map(video => {
-      let thumbnailUrl = video.thumbnails?.[0]?.url || video.thumbnail?.[0]?.url || '';
+      let thumbnailUrl = '';
+      if (video.thumbnails && video.thumbnails.length > 0) {
+        thumbnailUrl = video.thumbnails[0].url;
+      } else if (video.thumbnail && video.thumbnail.length > 0) {
+        thumbnailUrl = video.thumbnail[0].url;
+      }
       return { id: video.id, title: video.title?.text || 'No Title', thumbnail: thumbnailUrl };
     });
     res.json(videos);
@@ -40,7 +46,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// 🔗 2. googlevideoストリームURLを直接返却するAPI
+// 🔗 2. googlevideoストリームURLを直接返却するAPI（修正・強化版）
 app.get('/api/stream-url', async (req, res) => {
   const videoId = req.query.id;
   if (!videoId) return res.status(400).send('Video ID is required');
@@ -48,27 +54,33 @@ app.get('/api/stream-url', async (req, res) => {
   try {
     const youtube = await getYoutube();
     
-    // 動画の全詳細情報を取得
-    const videoInfo = await youtube.getInfo(videoId, 'WEB');
+    // 💡 クライアント指定を外す、または「ANDROID_TESTSUITE」など規制に強いものに変更
+    const videoInfo = await youtube.getInfo(videoId);
     
-    // 💡 映像と音声が合体している形式（Format）の中から最適なストリームURLを1つ抽出
+    // 💡 音声と映像が1つになっている（最も再生しやすい）フォーマットを厳選
     const format = videoInfo.chooseFormat({
-      type: 'video+audio', 
+      type: 'video+audio',
       quality: 'best'
     });
 
-    if (!format || !format.decipher(youtube.session.player)) {
-      throw new Error('Failed to decipher stream URL');
+    if (!format) {
+      throw new Error('No suitable format found');
     }
 
-    // 解号（デシファ）された「googlevideo.com」の生のURLを取得
-    const googleVideoUrl = format.url;
+    // 💡 暗号（シグネチャ）の解読処理を実行
+    const player = youtube.session.player;
+    const googleVideoUrl = format.decipher(player);
 
-    // ブラウザにURLをテキストでそのまま返す
+    if (!googleVideoUrl) {
+      throw new Error('Failed to decipher streaming URL');
+    }
+
+    // 解析できた googlevideo.com のURLを返す
     res.json({ url: googleVideoUrl });
 
   } catch (error) {
-    console.error('Failed to get googlevideo URL:', error);
+    console.error('--- URL Extraction Error ---');
+    console.error(error);
     res.status(500).json({ error: 'Failed to get stream URL', message: error.message });
   }
 });
